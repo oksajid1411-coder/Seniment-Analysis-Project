@@ -3,10 +3,97 @@ import joblib
 import pandas as pd
 from pathlib import Path
 import time
+import re
+import unicodedata
+from typing import Optional
 
 # ============================================================
 # PAGE CONFIG
 # ============================================================
+def clean_text(
+    text: str,
+    remove_extra_spaces: bool = True,
+    remove_special_chars: bool = True,
+    remove_numbers: bool = False,
+    remove_punctuation: bool = False,
+    lowercase: bool = False,
+    remove_html_tags: bool = True,
+    remove_urls: bool = True,
+    remove_emails: bool = False,
+    normalize_unicode: bool = True,
+    remove_accents: bool = False,
+    remove_newlines: bool = True,
+    min_word_length: int = 0,
+    language: str = 'bengali'  # 'bengali', 'english', 'mixed'
+) -> str:
+
+    if not isinstance(text, str):
+        text = str(text)
+
+    if remove_html_tags:
+        text = re.sub(r'<[^>]+>', '', text)
+
+    html_entities = {
+        '&amp;': '&',
+        '&lt;': '<',
+        '&gt;': '>',
+        '&quot;': '"',
+        '&apos;': "'",
+        '&#39;': "'",
+        '&nbsp;': ' ',
+    }
+    for entity, char in html_entities.items():
+        text = text.replace(entity, char)
+
+    if remove_urls:
+        text = re.sub(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', '', text)
+        text = re.sub(r'www\.[a-zA-Z0-9-]+\.[a-zA-Z]{2,}', '', text)
+
+    if remove_emails:
+        text = re.sub(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', '', text)
+
+    if normalize_unicode:
+        text = unicodedata.normalize('NFKD', text)
+
+    if remove_accents:
+        text = ''.join(
+            c for c in unicodedata.normalize('NFD', text)
+            if unicodedata.category(c) != 'Mn'
+        )
+
+    if remove_newlines:
+        text = text.replace('\n', ' ').replace('\r', ' ').replace('\t', ' ')
+
+    if remove_numbers:
+        text = re.sub(r'\d+', '', text)
+
+    if remove_special_chars:
+        if language == 'bengali':
+            text = re.sub(r'[^।-ঃ\u0980-\u09FFa-zA-Z0-9\s]', '', text)
+        elif language == 'english':
+            text = re.sub(r'[^a-zA-Z0-9\s]', '', text)
+        else:  # mixed
+            text = re.sub(r'[^।-ঃ\u0980-\u09FFa-zA-Z0-9\s]', '', text)
+
+    if remove_punctuation:
+        punctuation = r'[।,.!?;:\'\"`]'
+        text = re.sub(punctuation, '', text)
+
+    if remove_extra_spaces:
+        text = re.sub(r'\s+', ' ', text)
+        text = text.strip()
+
+    if lowercase:
+        text = text.lower()
+
+    if min_word_length > 0:
+        words = text.split()
+        words = [word for word in words if len(word) >= min_word_length]
+        text = ' '.join(words)
+    text= text.replace("not good","bad")
+    text= text.replace("not bad","a bit good")
+    return text.lower()
+
 st.set_page_config(
     page_title="Sentiment Analyzer",
     page_icon="💭",
@@ -484,7 +571,7 @@ if analyze_button:
         time.sleep(0.35)
 
         try:
-            text_vectorized = vectorizer.transform([user_input])
+            text_vectorized = vectorizer.transform([clean_text(user_input)])
 
             # Actual prediction
             prediction = model.predict(text_vectorized)[0]
@@ -655,7 +742,7 @@ if analyze_button:
 st.markdown(
     """
     <div class="footer">
-        Built with ❤️ using Streamlit & Machine Learning
+        Built by MD. Omar Kamran Chy using Streamlit & Machine Learning
         <br>
         Sentiment Analysis Application
     </div>
